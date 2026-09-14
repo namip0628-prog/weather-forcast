@@ -29,10 +29,23 @@ function App() {
         },
       });
 
-      setWeather(response.data);
-      setCity(response.data.city || cityName || 'Your location');
+      const payload = response?.data;
+      if (!payload || typeof payload !== 'object' || payload.error || !payload.city) {
+        setWeather(null);
+        setError(typeof payload?.error === 'string' ? payload.error : 'Something went wrong while fetching the weather.');
+        return;
+      }
+
+      setWeather(payload);
+      setCity(payload.city || cityName || 'Your location');
     } catch (err) {
-      const message = err.response?.data?.error || 'Something went wrong while fetching the weather.';
+      const payload = err?.response?.data;
+      const message = typeof payload?.error === 'string'
+        ? payload.error
+        : typeof payload?.message === 'string'
+          ? payload.message
+          : 'Something went wrong while fetching the weather.';
+
       setError(message);
       setWeather(null);
     } finally {
