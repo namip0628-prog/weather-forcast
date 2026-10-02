@@ -1,4 +1,8 @@
-from backend.app import determine_mood, build_forecast
+from unittest.mock import patch
+
+import pytest
+
+from backend.app import build_forecast, determine_mood, get_weather_by_city
 
 
 def test_determine_mood_for_sunny_weather():
@@ -18,3 +22,25 @@ def test_build_forecast_creates_mood_trend():
     assert len(forecast) == 2
     assert forecast[0]["mood"] == "Energetic"
     assert forecast[1]["mood"] == "Cozy"
+
+
+def test_get_weather_by_city_requires_api_key(monkeypatch):
+    import backend.app as app_module
+
+    monkeypatch.setattr(app_module, "API_KEY", None)
+
+    with pytest.raises(ValueError, match="API key"):
+        app_module.get_weather_by_city("London")
+
+
+def test_get_weather_by_city_reports_invalid_api_key(monkeypatch):
+    import backend.app as app_module
+
+    monkeypatch.setattr(app_module, "API_KEY", "bad-key")
+
+    with patch("backend.app.requests.get") as mock_get:
+        mock_get.return_value.status_code = 401
+        mock_get.return_value.json.return_value = {"message": "Invalid API key"}
+
+        with pytest.raises(ValueError, match="invalid|expired"):
+            app_module.get_weather_by_city("London")

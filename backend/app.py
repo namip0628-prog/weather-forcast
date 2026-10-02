@@ -60,6 +60,8 @@ def get_weather_by_city(city: str) -> Dict[str, Any]:
     """Fetch weather for a city using the OpenWeatherMap API."""
     if not city:
         raise ValueError("A city name is required.")
+    if not API_KEY:
+        raise ValueError("OpenWeatherMap API key is missing. Set OPENWEATHER_API_KEY in your environment.")
 
     response = requests.get(
         f"{BASE_URL}/weather",
@@ -71,6 +73,11 @@ def get_weather_by_city(city: str) -> Dict[str, Any]:
         timeout=10,
     )
 
+    if response.status_code == 401:
+        message = (response.json() or {}).get("message", "")
+        if "invalid" in message.lower() or "expired" in message.lower():
+            raise ValueError("OpenWeatherMap API key is invalid or expired.")
+        raise ValueError("OpenWeatherMap API key is invalid.")
     if response.status_code == 404:
         raise ValueError(f"City '{city}' was not found.")
     if response.status_code != 200:
@@ -89,6 +96,9 @@ def get_weather_by_city(city: str) -> Dict[str, Any]:
 
 def get_weather_by_coordinates(lat: float, lon: float) -> Dict[str, Any]:
     """Fetch weather for coordinates."""
+    if not API_KEY:
+        raise ValueError("OpenWeatherMap API key is missing. Set OPENWEATHER_API_KEY in your environment.")
+
     response = requests.get(
         f"{BASE_URL}/weather",
         params={
@@ -100,6 +110,11 @@ def get_weather_by_coordinates(lat: float, lon: float) -> Dict[str, Any]:
         timeout=10,
     )
 
+    if response.status_code == 401:
+        message = (response.json() or {}).get("message", "")
+        if "invalid" in message.lower() or "expired" in message.lower():
+            raise ValueError("OpenWeatherMap API key is invalid or expired.")
+        raise ValueError("OpenWeatherMap API key is invalid.")
     if response.status_code != 200:
         raise ValueError("Unable to determine the weather at your current location.")
 
@@ -116,6 +131,9 @@ def get_weather_by_coordinates(lat: float, lon: float) -> Dict[str, Any]:
 
 def get_forecast(city: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None) -> List[Dict[str, Any]]:
     """Fetch the 5-day forecast and add mood labels for each item."""
+    if not API_KEY:
+        raise ValueError("OpenWeatherMap API key is missing. Set OPENWEATHER_API_KEY in your environment.")
+
     params = {"appid": API_KEY, "units": "metric", "cnt": 5}
     if city:
         params["q"] = city
@@ -126,6 +144,11 @@ def get_forecast(city: Optional[str] = None, lat: Optional[float] = None, lon: O
         raise ValueError("City or coordinates are required.")
 
     response = requests.get(f"{BASE_URL}/forecast", params=params, timeout=10)
+    if response.status_code == 401:
+        message = (response.json() or {}).get("message", "")
+        if "invalid" in message.lower() or "expired" in message.lower():
+            raise ValueError("OpenWeatherMap API key is invalid or expired.")
+        raise ValueError("OpenWeatherMap API key is invalid.")
     if response.status_code != 200:
         raise ValueError("The forecast could not be loaded.")
 
