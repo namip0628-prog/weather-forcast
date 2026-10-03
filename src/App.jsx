@@ -16,12 +16,15 @@ function App() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
+  const weatherEndpoint = apiBaseUrl ? `${apiBaseUrl}/weather` : '/weather';
+
   const fetchWeather = useCallback(async (cityName, lat, lon) => {
     setLoading(true);
     setError('');
 
     try {
-      const response = await axios.get('/weather', {
+      const response = await axios.get(weatherEndpoint, {
         params: {
           city: cityName || undefined,
           lat: lat ?? undefined,
