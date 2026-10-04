@@ -1,6 +1,8 @@
 # Weather Mood
-#LIVE DEMO: https://weather-forcast-front.onrender.com/
-#A weather dashboard that pairs current conditions with mood labels and a short forecast trend. The React frontend uses a Flask backend to query the OpenWeatherMap API.
+
+LIVE DEMO: https://weather-forcast-front.onrender.com/
+
+A weather dashboard that pairs current conditions with mood labels and a short forecast trend. The React frontend uses a Flask backend to query the OpenWeatherMap API.
 
 ## Requirements
 
