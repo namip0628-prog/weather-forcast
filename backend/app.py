@@ -27,6 +27,21 @@ MOOD_PATTERNS = [
     ("fog", "Balanced"),
 ]
 
+POPULAR_CITIES = [
+    "London",
+    "New York",
+    "Tokyo",
+    "Paris",
+    "Dubai",
+    "Sydney",
+    "Berlin",
+    "Mumbai",
+    "Cape Town",
+    "Toronto",
+    "Rome",
+    "Seoul",
+]
+
 
 def determine_mood(description: str) -> str:
     """Map the weather description to a friendly mood label."""
@@ -54,6 +69,26 @@ def build_forecast(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             }
         )
     return forecast
+
+
+def build_hourly_forecast(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return a compact hourly snapshot for the next several time slots."""
+    hourly: List[Dict[str, Any]] = []
+    for entry in entries[:5]:
+        weather = (entry.get("weather") or [{}])[0]
+        description = weather.get("description", "Clear")
+        temperature = entry.get("main", {}).get("temp")
+        dt_text = entry.get("dt_txt")
+        time_value = dt_text.split(" ")[-1][:5] if isinstance(dt_text, str) else "Now"
+        hourly.append(
+            {
+                "time": time_value,
+                "temperature": round(float(temperature) - 273.15, 1) if temperature is not None else None,
+                "condition": description.title(),
+                "mood": determine_mood(description),
+            }
+        )
+    return hourly
 
 
 def get_weather_by_city(city: str) -> Dict[str, Any]:
@@ -157,6 +192,48 @@ def get_forecast(city: Optional[str] = None, lat: Optional[float] = None, lon: O
     return build_forecast(entries)
 
 
+def get_hourly_forecast(city: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None) -> List[Dict[str, Any]]:
+    """Fetch a compact hourly outlook for upcoming time slots."""
+    if not API_KEY:
+        raise ValueError("OpenWeatherMap API key is missing. Set OPENWEATHER_API_KEY in your environment.")
+
+    params = {"appid": API_KEY, "units": "metric", "cnt": 5}
+    if city:
+        params["q"] = city
+    elif lat is not None and lon is not None:
+        params["lat"] = lat
+        params["lon"] = lon
+    else:
+        raise ValueError("City or coordinates are required.")
+
+    response = requests.get(f"{BASE_URL}/forecast", params=params, timeout=10)
+    if response.status_code == 401:
+        message = (response.json() or {}).get("message", "")
+        if "invalid" in message.lower() or "expired" in message.lower():
+            raise ValueError("OpenWeatherMap API key is invalid or expired.")
+        raise ValueError("OpenWeatherMap API key is invalid.")
+    if response.status_code != 200:
+        raise ValueError("The hourly forecast could not be loaded.")
+
+    payload = response.json()
+    entries = (payload.get("list") or [])[:5]
+    return build_hourly_forecast(entries)
+
+
+@app.route("/", methods=["GET"])
+def index_route() -> Any:
+    return jsonify({
+        "status": "ok",
+        "message": "Weather Mood API",
+        "cities": POPULAR_CITIES,
+    }), 200
+
+
+@app.route("/cities", methods=["GET"]) 
+def cities_route() -> Any:
+    return jsonify({"cities": POPULAR_CITIES}), 200
+
+
 @app.route("/weather", methods=["GET"])
 def weather_route() -> Any:
     """Public endpoint used by the React frontend."""
@@ -176,7 +253,8 @@ def weather_route() -> Any:
             return jsonify({"error": "Please provide a city name or location coordinates."}), 400
 
         forecast = get_forecast(city=city or None, lat=lat, lon=lon)
-        return jsonify({**current, "forecast": forecast}), 200
+        hourly = get_hourly_forecast(city=city or None, lat=lat, lon=lon)
+        return jsonify({**current, "forecast": forecast, "hourly": hourly}), 200
     except ValueError as exc:
         message = str(exc).lower()
         status = 404 if "not found" in message or "required" in message else 400

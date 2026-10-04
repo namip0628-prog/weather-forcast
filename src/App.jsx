@@ -15,18 +15,70 @@ function App() {
   const [weather, setWeather] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [popularCities, setPopularCities] = useState(['London', 'New York', 'Tokyo', 'Paris', 'Dubai']);
+  const [favorites, setFavorites] = useState(() => {
+    if (typeof window === 'undefined') return ['London'];
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('weather-favorites') || '[]');
+      return Array.isArray(saved) && saved.length ? saved : ['London'];
+    } catch {
+      return ['London'];
+    }
+  });
+  const [searchHistory, setSearchHistory] = useState(() => {
+    if (typeof window === 'undefined') return ['London'];
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('weather-history') || '[]');
+      return Array.isArray(saved) && saved.length ? saved : ['London'];
+    } catch {
+      return ['London'];
+    }
+  });
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('weather-theme') === 'dark';
+  });
 
   const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
   const weatherEndpoint = apiBaseUrl ? `${apiBaseUrl}/weather` : '/weather';
+  const citiesEndpoint = apiBaseUrl ? `${apiBaseUrl}/cities` : '/cities';
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('weather-favorites', JSON.stringify(favorites));
+    }
+  }, [favorites]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('weather-history', JSON.stringify(searchHistory));
+    }
+  }, [searchHistory]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('weather-theme', darkMode ? 'dark' : 'light');
+    }
+  }, [darkMode]);
+
+  const addToHistory = useCallback((value) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return;
+    setSearchHistory((previous) => [
+      trimmed,
+      ...previous.filter((item) => item.toLowerCase() !== trimmed.toLowerCase()),
+    ].slice(0, 5));
+  }, []);
 
   const fetchWeather = useCallback(async (cityName, lat, lon) => {
+    const targetCity = cityName?.trim();
     setLoading(true);
     setError('');
 
     try {
       const response = await axios.get(weatherEndpoint, {
         params: {
-          city: cityName || undefined,
+          city: targetCity || undefined,
           lat: lat ?? undefined,
           lon: lon ?? undefined,
         },
@@ -40,7 +92,8 @@ function App() {
       }
 
       setWeather(payload);
-      setCity(payload.city || cityName || 'Your location');
+      if (targetCity) addToHistory(targetCity);
+      setCity(payload.city || targetCity || 'Your location');
     } catch (err) {
       const payload = err?.response?.data;
       const message = typeof payload?.error === 'string'
@@ -54,11 +107,20 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [addToHistory, weatherEndpoint]);
 
   useEffect(() => {
+    axios.get(citiesEndpoint)
+      .then((response) => {
+        const cities = Array.isArray(response?.data?.cities) ? response.data.cities : ['London', 'New York', 'Tokyo', 'Paris', 'Dubai'];
+        setPopularCities(cities);
+      })
+      .catch(() => {
+        setPopularCities(['London', 'New York', 'Tokyo', 'Paris', 'Dubai']);
+      });
+
     fetchWeather('London');
-  }, [fetchWeather]);
+  }, [citiesEndpoint, fetchWeather]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -89,17 +151,31 @@ function App() {
     );
   };
 
+  const toggleFavorite = (favoriteCity) => {
+    setFavorites((previous) => {
+      const exists = previous.some((item) => item.toLowerCase() === favoriteCity.toLowerCase());
+      if (exists) {
+        return previous.filter((item) => item.toLowerCase() !== favoriteCity.toLowerCase());
+      }
+      return [favoriteCity, ...previous].slice(0, 5);
+    });
+  };
+
   const mood = weather?.mood || 'Balanced';
   const theme = moodThemes[mood] || moodThemes.Balanced;
+  const hourlyForecast = weather?.hourly || [];
 
   return (
-    <main className="app-shell" style={{ background: theme.background }}>
+    <main className={darkMode ? 'app-shell dark' : 'app-shell'} style={{ background: darkMode ? '#1f2c30' : theme.background }}>
       <section className="weather-card">
         <div className="topbar">
           <div>
             <p className="eyebrow">Weather Mood</p>
             <h1>How does the sky feel today?</h1>
           </div>
+          <button type="button" className="theme-toggle" onClick={() => setDarkMode((current) => !current)}>
+            {darkMode ? 'Light mode' : 'Dark mode'}
+          </button>
         </div>
 
         <form className="searchbar" onSubmit={handleSubmit}>
@@ -118,6 +194,48 @@ function App() {
           </button>
         </form>
 
+        <div className="chip-row">
+          <span className="chip-label">Popular</span>
+          <div className="city-pills" aria-label="Popular cities">
+            {popularCities.map((popularCity) => (
+              <button
+                key={popularCity}
+                type="button"
+                className={popularCity === city ? 'chip active' : 'chip'}
+                onClick={() => {
+                  setCity(popularCity);
+                  fetchWeather(popularCity);
+                }}
+              >
+                {popularCity}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="meta-row">
+          <div className="meta-group">
+            <span className="chip-label">Favorites</span>
+            <div className="inline-pills">
+              {favorites.map((favoriteCity) => (
+                <button key={favoriteCity} type="button" className="chip small" onClick={() => fetchWeather(favoriteCity)}>
+                  {favoriteCity}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="meta-group">
+            <span className="chip-label">Recent</span>
+            <div className="inline-pills">
+              {searchHistory.map((historyCity) => (
+                <button key={historyCity} type="button" className="chip small" onClick={() => fetchWeather(historyCity)}>
+                  {historyCity}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {error && <div className="error-box">{error}</div>}
 
         {weather && (
@@ -127,9 +245,14 @@ function App() {
                 <p className="label">Location</p>
                 <h2>{weather.city}</h2>
               </div>
-              <span className="mood-pill" style={{ background: theme.accent, color: '#1f2c3d' }}>
-                {mood}
-              </span>
+              <div className="detail-actions">
+                <button type="button" className="favorite-button" onClick={() => toggleFavorite(weather.city)}>
+                  {favorites.some((item) => item.toLowerCase() === weather.city.toLowerCase()) ? '★ Saved' : '☆ Save'}
+                </button>
+                <span className="mood-pill" style={{ background: theme.accent, color: '#1f2c3d' }}>
+                  {mood}
+                </span>
+              </div>
             </div>
 
             <div className="stats-grid">
@@ -144,6 +267,19 @@ function App() {
               <div className="stat-box full-width">
                 <span className="label">Mood Forecast</span>
                 <strong>{weather.mood}</strong>
+              </div>
+            </div>
+
+            <div className="hourly-box">
+              <h3>Upcoming Hours</h3>
+              <div className="hourly-list">
+                {hourlyForecast.map((item) => (
+                  <div key={`${weather.city}-${item.time}`} className="hourly-item">
+                    <span>{item.time}</span>
+                    <strong>{item.mood}</strong>
+                    <small>{item.temperature}°C</small>
+                  </div>
+                ))}
               </div>
             </div>
 

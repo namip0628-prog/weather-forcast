@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.app import build_forecast, determine_mood, get_weather_by_city
+from backend.app import POPULAR_CITIES, build_forecast, determine_mood, get_weather_by_city
 
 
 def test_determine_mood_for_sunny_weather():
@@ -44,3 +44,23 @@ def test_get_weather_by_city_reports_invalid_api_key(monkeypatch):
 
         with pytest.raises(ValueError, match="invalid|expired"):
             app_module.get_weather_by_city("London")
+
+
+def test_popular_cities_include_multiple_cities():
+    assert "London" in POPULAR_CITIES
+    assert "New York" in POPULAR_CITIES
+    assert "Tokyo" in POPULAR_CITIES
+    assert "Paris" in POPULAR_CITIES
+
+
+def test_city_endpoint_returns_supported_cities():
+    from backend.app import app
+
+    client = app.test_client()
+    response = client.get("/cities")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "cities" in data
+    assert "New York" in data["cities"]
+    assert "London" in data["cities"]
